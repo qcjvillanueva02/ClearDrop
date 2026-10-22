@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Found It — School Lost &amp; Found</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@500;600&family=Work+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ================================================================
+     LOGIN SCREEN — the only thing visible on load.
+     #mainWebsite is display:none in styles.css until login succeeds,
+     so the Home page never flashes before this.
+     ================================================================ -->
+<div id="loginScreen" class="login-screen">
+
+  <video id="loginVideo" class="login-video" autoplay muted loop playsinline>
+    <source src="Lost and Found.mp4" type="video/mp4">
+  </video>
+
+  <div class="login-overlay"></div>
+
+  <div class="login-box" id="loginBox" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="login-logo">
+      <svg class="petal-mark" viewBox="0 0 40 40" fill="none">
+        <g fill="#F6C400">
+          <ellipse cx="20" cy="8" rx="5" ry="9"/>
+          <ellipse cx="20" cy="32" rx="5" ry="9"/>
+          <ellipse cx="8" cy="20" rx="9" ry="5"/>
+          <ellipse cx="32" cy="20" rx="9" ry="5"/>
+          <ellipse cx="11.5" cy="11.5" rx="5" ry="9" transform="rotate(45 11.5 11.5)"/>
+          <ellipse cx="28.5" cy="28.5" rx="5" ry="9" transform="rotate(45 28.5 28.5)"/>
+          <ellipse cx="28.5" cy="11.5" rx="5" ry="9" transform="rotate(-45 28.5 11.5)"/>
+          <ellipse cx="11.5" cy="28.5" rx="5" ry="9" transform="rotate(-45 11.5 28.5)"/>
+        </g>
+        <circle cx="20" cy="20" r="7" fill="#1A1712"/>
+      </svg>
+      <span>LosTechno</span>
+    </div>
+
+    <h2 id="loginTitle">Welcome Back</h2>
+    <p class="login-tagline">Student Lost &amp; Found</p>
+
+    <form id="loginForm" class="login-form" novalidate>
+      <div class="field">
+        <label for="loginUser">Student ID / Username</label>
+        <input type="text" id="loginUser" placeholder="e.g. 2410526" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="loginPass">Password</label>
+        <input type="password" id="loginPass" placeholder="••••••" autocomplete="current-password" required>
+      </div>
+
+      <div class="login-remember">
+        <label><input type="checkbox" id="rememberMe"> Remember me</label>
+      </div>
+
+      <p class="login-error" id="loginError">Invalid username or password.</p>
+
+      <button type="submit" class="btn btn-primary login-submit">Login</button>
+    </form>
+
+    <p class="login-demo-hint">Demo credentials: <strong>2410526</strong> / <strong>1234</strong></p>
+  </div>
+
+</div>
+
+<!-- ================================================================
+     MAIN WEBSITE — existing Home page, hidden until login succeeds
+     ================================================================ -->
+<div id="mainWebsite">
+
+<header>
+  <nav class="wrap">
+      <div class="logo">
+          <svg class="petal-mark" viewBox="0 0 40 40" fill="none">
+              <g fill="#F6C400">
+                  <ellipse cx="20" cy="8" rx="5" ry="9" />
+                  <ellipse cx="20" cy="32" rx="5" ry="9" />
+                  <ellipse cx="8" cy="20" rx="9" ry="5" />
+                  <ellipse cx="32" cy="20" rx="9" ry="5" />
+                  <ellipse cx="11.5" cy="11.5" rx="5" ry="9" transform="rotate(45 11.5 11.5)" />
+                  <ellipse cx="28.5" cy="28.5" rx="5" ry="9" transform="rotate(45 28.5 28.5)" />
+                  <ellipse cx="28.5" cy="11.5" rx="5" ry="9" transform="rotate(-45 28.5 11.5)" />
+                  <ellipse cx="11.5" cy="28.5" rx="5" ry="9" transform="rotate(-45 11.5 28.5)" />
+              </g>
+              <circle cx="20" cy="20" r="7" fill="#1A1712" />
+          </svg>
+          LosTechno
+      </div>
+    <button class="hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#home">Home</a></li>
+      <li><a href="#browse">Browse Items</a></li>
+      <li><a href="#how">How It Works</a></li>
+      <li><a href="#about">About Us</a></li>
+      <li><a href="#report" class="nav-cta">Report an Item</a></li>
+      <li class="nav-search-item">
+        <button type="button" class="nav-search-btn" id="navSearchBtn" aria-label="Search items" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Search</span>
+        </button>
+      </li>
+      <li class="nav-auth-item" id="navAuthItem">
+        <button type="button" class="nav-login-btn" id="navLoginBtn">Login</button>
+        <div class="account-wrap" id="accountWrap" style="display:none;">
+          <button type="button" class="nav-account-btn" id="navAccountBtn" aria-expanded="false">
+            Account <span class="caret">▾</span>
+          </button>
+          <div class="account-dropdown" id="accountDropdown">
+            <div class="account-dropdown-head">
+              <span class="account-dropdown-title">Student Account</span>
+              <span class="account-dropdown-id">ID: <span id="accountIdDisplay">2410526</span></span>
+            </div>
+            <a href="#" class="account-dropdown-link">Profile</a>
+            <a href="#" class="account-dropdown-link">My Claims</a>
+            <button type="button" class="account-dropdown-link account-logout" id="logoutBtn">Log Out</button>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </nav>
+</header>
+
+<!-- ===== SEARCH PANEL (dropdown from navbar) ===== -->
+<div class="search-panel" id="searchPanel">
+  <div class="wrap search-panel-inner">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search lost & found items...">
+      <button type="button" class="search-clear" id="searchClearBtn">Clear</button>
+    </div>
+    <p class="search-no-results" id="searchNoResults">No items found.</p>
+  </div>
+</div>
+
+<!-- ===== LOGIN MODAL (opened from navbar, over Home page) ===== -->
+<div class="login-modal-overlay" id="loginModalOverlay">
+  <div class="login-modal-box" id="loginModalBox" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+    <button type="button" class="login-modal-close" id="loginModalClose" aria-label="Close">&times;</button>
+    <div class="login-logo">
+      <svg class="petal-mark" viewBox="0 0 40 40" fill="none">
+        <g fill="#F6C400">
+          <ellipse cx="20" cy="8" rx="5" ry="9"/>
+          <ellipse cx="20" cy="32" rx="5" ry="9"/>
+          <ellipse cx="8" cy="20" rx="9" ry="5"/>
+          <ellipse cx="32" cy="20" rx="9" ry="5"/>
+          <ellipse cx="11.5" cy="11.5" rx="5" ry="9" transform="rotate(45 11.5 11.5)"/>
+          <ellipse cx="28.5" cy="28.5" rx="5" ry="9" transform="rotate(45 28.5 28.5)"/>
+          <ellipse cx="28.5" cy="11.5" rx="5" ry="9" transform="rotate(-45 28.5 11.5)"/>
+          <ellipse cx="11.5" cy="28.5" rx="5" ry="9" transform="rotate(-45 11.5 28.5)"/>
+        </g>
+        <circle cx="20" cy="20" r="7" fill="#1A1712"/>
+      </svg>
+      <span>Found It</span>
+    </div>
+    <h2 id="loginModalTitle">Sign In to Account</h2>
+
+    <form id="loginModalForm" class="login-form" novalidate>
+      <div class="field">
+        <label for="loginModalUser">Student ID</label>
+        <input type="text" id="loginModalUser" placeholder="e.g. 2410526" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="loginModalPass">Password</label>
+        <input type="password" id="loginModalPass" placeholder="••••••" autocomplete="current-password" required>
+      </div>
+
+      <p class="login-error" id="loginModalError">Invalid login</p>
+
+      <button type="submit" class="btn btn-primary login-submit">Login</button>
+    </form>
+    <p class="login-demo-hint">Demo credentials: <strong>2410526</strong> / <strong>1234</strong></p>
+  </div>
+</div>
+
+<!-- ===== HERO / LANDING ===== -->
+<section id="home" class="hero cork">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+        <span class="hero-eyebrow">Lostechno: Development a Web-Based Lost and Found Management System for Technological Intitute of Philippines Campus Facilities</span>
+    <h1>Lost a gadget?<br>Someone <span class="hi">pinned</span> it here.</h1>
+    <p class="lede">Phones, laptops, earphones, chargers, tablets, smartwatches — every gadget turned in at school gets logged and posted here so you can find it fast, no waiting in line at the office.</p>
+    <div class="btn-row">
+      <a href="#browse" class="btn btn-primary">Browse Found Items</a>
+      <a href="#report" class="btn btn-ghost">Report Something Lost</a>
+    </div>
+
+    <div class="tear-strip">
+      <h3>Quick-check: was it turned in today?</h3>
+      <div class="tabs">
+        <div class="tab">iPhone 13 — Rm 204</div>
+        <div class="tab">Dell laptop — Gym</div>
+        <div class="tab">AirPods case — Lib</div>
+        <div class="tab">Samsung — Canteen</div>
+        <div class="tab">Charger — Rm 118</div>
+        <div class="tab">Smartwatch — Field</div>
+      </div>
+    </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="hero-photo-frame">
+        <img src="hero-lost-items.png" alt="Flat-lay of commonly lost items: a wallet, USB drive, glasses, headphones, watches, keys, and a phone">
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="stats">
+  <div class="wrap">
+    <div class="stat"><b>312</b><span>Items logged this year</span></div>
+    <div class="stat"><b>247</b><span>Returned to owners</span></div>
+    <div class="stat"><b>48h</b><span>Average time to claim</span></div>
+    <div class="stat"><b>6</b><span>Drop-off points on campus</span></div>
+  </div>
+</div>
+
+<!-- ===== HELP ME FIND MY ITEM — FINDER ===== -->
+<section id="finder">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Item Finder</span>
+      <h2>What are you looking for?</h2>
+      <p>Pick a category and answer a few quick questions — you don't need to know the exact model, just what you remember.</p>
+    </div>
+
+    <div class="finder-cat-grid" id="finderCatGrid">
+      <button class="finder-cat-card" data-category="phone">
+        <span class="finder-cat-icon">📱</span>
+        <span class="finder-cat-label">Phones</span>
+      </button>
+      <button class="finder-cat-card" data-category="ids">
+        <span class="finder-cat-icon">💳</span>
+        <span class="finder-cat-label">ID's</span>
+      </button>
+      <button class="finder-cat-card" data-category="creditcard">
+        <span class="finder-cat-icon">💳</span>
+        <span class="finder-cat-label">Credit Cards</span>
+      </button>
+      <button class="finder-cat-card" data-category="wallet">
+        <span class="finder-cat-icon">👛</span>
+        <span class="finder-cat-label">Wallets</span>
+      </button>
+      <button class="finder-cat-card" data-category="keys">
+        <span class="finder-cat-icon">🔑</span>
+        <span class="finder-cat-label">Keys</span>
+      </button>
+      <button class="finder-cat-card" data-category="bags">
+        <span class="finder-cat-icon">🎒</span>
+        <span class="finder-cat-label">Bags</span>
+      </button>
+      <button class="finder-cat-card" data-category="eyewear">
+        <span class="finder-cat-icon">👓</span>
+        <span class="finder-cat-label">Eyewear</span>
+      </button>
+      <button class="finder-cat-card" data-category="laptop">
+        <span class="finder-cat-icon">💻</span>
+        <span class="finder-cat-label">Laptops</span>
+      </button>
+      <button class="finder-cat-card" data-category="earphones">
+        <span class="finder-cat-icon">🎧</span>
+        <span class="finder-cat-label">Earphones</span>
+      </button>
+      <button class="finder-cat-card" data-category="smartwatch">
+        <span class="finder-cat-icon">⌚</span>
+        <span class="finder-cat-label">Smartwatches</span>
+      </button>
+      <button class="finder-cat-card" data-category="charger">
+        <span class="finder-cat-icon">🔌</span>
+        <span class="finder-cat-label">Chargers</span>
+      </button>
+      <button class="finder-cat-card" data-category="tablet">
+        <span class="finder-cat-icon">📱</span>
+        <span class="finder-cat-label">Tablets</span>
+      </button>
+      <button class="finder-cat-card" data-category="other">
+        <span class="finder-cat-icon">🧳</span>
+        <span class="finder-cat-label">Other Items</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FINDER MODAL — Category → Brand → Design → Color → Logo → Details → Results ===== -->
+<div class="finder-modal-overlay" id="finderModalOverlay">
+  <div class="finder-modal-box" id="finderModalBox" role="dialog" aria-modal="true" aria-labelledby="finderModalTitle">
+    <button type="button" class="finder-modal-close" id="finderModalClose" aria-label="Close">&times;</button>
+
+    <div class="finder-progress" id="finderProgress"></div>
+
+    <div class="finder-step-head">
+      <button type="button" class="finder-back-btn" id="finderBackBtn">&larr; Back</button>
+      <h3 id="finderModalTitle" class="finder-step-title"></h3>
+    </div>
+
+    <div class="finder-step-body" id="finderStepBody"></div>
+
+    <div class="finder-step-actions" id="finderStepActions"></div>
+  </div>
+</div>
+
+<!-- ===== BROWSE ITEMS ===== -->
+<section id="browse">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">The Board</span>
+      <h2>Recently found gadgets</h2>
+      <p>Tap a category to filter, or search the board the way you'd scan a corkboard outside the front office. Items unclaimed after 30 days go to the school store room.</p>
+    </div>
+
+    <div class="filter-row">
+      <button class="chip active">All</button>
+      <button class="chip">Phones</button>
+      <button class="chip">Laptops</button>
+      <button class="chip">Earphones</button>
+      <button class="chip">Chargers</button>
+      <button class="chip">Watches</button>
+      <button class="chip">Tablets</button>
+    </div>
+
+    <div class="grid">
+
+      <div class="card" data-category="phone" data-brand="apple" data-design="iphone-with-2-cameras" data-color="black" data-logo="apple">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="10" y1="19" x2="14" y2="19"/></svg>
+        <span class="status unclaimed">Unclaimed</span>
+        <h4>Black iPhone</h4>
+        <div class="meta">Found: Rm 204, 3B<br>Date: Aug 11 · Cracked corner case</div>
+        <button class="btn btn-primary">This is mine</button>
+      </div>
+
+      <div class="card" data-category="laptop" data-brand="dell" data-design="standard-laptop" data-color="gray" data-logo="dell">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="12" rx="1"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+        <span class="status unclaimed">Unclaimed</span>
+        <h4>Grey Dell Laptop</h4>
+        <div class="meta">Found: Gymnasium<br>Date: Aug 11 · Stickers on lid</div>
+        <button class="btn btn-primary">This is mine</button>
+      </div>
+
+      <div class="card" data-category="earphones" data-brand="apple" data-design="true-wireless-earbuds" data-color="white" data-logo="apple">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="16" r="3"/><circle cx="16" cy="16" r="3"/><path d="M8 13V7a4 4 0 0 1 8 0v6"/></svg>
+        <span class="status unclaimed">Unclaimed</span>
+        <h4>AirPods Case</h4>
+        <div class="meta">Found: Library, 2F<br>Date: Aug 10 · White, scuffed</div>
+        <button class="btn btn-primary">This is mine</button>
+      </div>
+
+      <div class="card" data-category="phone" data-brand="samsung" data-design="galaxy-a-series" data-color="blue" data-logo="samsung">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="7" y="1.5" width="10" height="21" rx="2"/><line x1="10" y1="19" x2="14" y2="19"/></svg>
+        <span class="status unclaimed">Unclaimed</span>
+        <h4>Samsung Galaxy</h4>
+        <div class="meta">Found: Canteen<br>Date: Aug 10 · Blue silicone case</div>
+        <button class="btn btn-primary">This is mine</button>
+      </div>
+
+      <div class="card" data-category="charger" data-brand="phone-charger" data-color="white">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
+        <span class="status claimed">Claimed</span>
+        <h4>USB-C Charger + Cable</h4>
+        <div class="meta">Found: Rm 118<br>Date: Aug 9 · White brick, 20W</div>
+        <button class="btn btn-primary">This is mine</button>
+      </div>
+
+      <div class="card" data-category="smartwatch" data-brand="other" data-design="round-face" data-color="black" data-logo="other">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="7"/><path d="M12 9v3l2 2"/><path d="M9 2h6M9 22h6"/></svg>
+        <span class="status unclaimed">Unclaimed</span>
+        <h4>Black Smartwatch</h4>
+        <div class="meta">Found: Sports Field<br>Date: Aug 9 · Rubber strap</div>
+        <button class="btn btn-primary">This is mine</button>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===== HOW IT WORKS ===== -->
+<section id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow" style="color:var(--sun);">The Process</span>
+      <h2>How claiming works</h2>
+      <p>Three steps, same order every time — so nobody has to guess where their gadget went.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="num">01</div>
+        <h4>It gets logged</h4>
+        <p>Whoever finds an item hands it to the front office or a teacher, who logs it here with the item, location, and date found.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h4>You check the board</h4>
+        <p>Search or filter by category above. Each listing shows just enough detail for you to recognize your own gadget, not anyone else's.</p>
+      </div>
+      <div class="step">
+        <div class="num">03</div>
+        <h4>You claim it in person</h4>
+        <p>Tap "This is mine," then bring your student ID to the front office. Staff verify ownership before releasing any item.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== ABOUT US ===== -->
+<section id="about">
+  <div class="wrap about-grid">
+    <div class="about-visual">
+      <svg class="petal-big" viewBox="0 0 40 40" fill="none">
+        <g fill="#1A1712">
+          <ellipse cx="20" cy="8" rx="5" ry="9"/>
+          <ellipse cx="20" cy="32" rx="5" ry="9"/>
+          <ellipse cx="8" cy="20" rx="9" ry="5"/>
+          <ellipse cx="32" cy="20" rx="9" ry="5"/>
+          <ellipse cx="11.5" cy="11.5" rx="5" ry="9" transform="rotate(45 11.5 11.5)"/>
+          <ellipse cx="28.5" cy="28.5" rx="5" ry="9" transform="rotate(45 28.5 28.5)"/>
+          <ellipse cx="28.5" cy="11.5" rx="5" ry="9" transform="rotate(-45 28.5 11.5)"/>
+          <ellipse cx="11.5" cy="28.5" rx="5" ry="9" transform="rotate(-45 11.5 28.5)"/>
+        </g>
+        <circle cx="20" cy="20" r="7" fill="#FFF6DD"/>
+      </svg>
+    </div>
+    <div class="about-copy">
+      <span class="eyebrow" style="color:var(--alert); font-family:'IBM Plex Mono',monospace; font-size:0.75rem; font-weight:600;">About Us</span>
+      <h2 style="margin:12px 0 16px;">Run by the Student Council,<br>backed by the Front Office</h2>
+      <p>Found It started as a corkboard outside Room 101 — now it's the same idea online. Every gadget turned in anywhere on campus gets logged by staff and posted here within the same school day.</p>
+      <p>We built it because gadgets are expensive and time in line at the office is not. If it's yours, you should be able to spot it from your phone before first period even starts.</p>
+      <ul class="fact-list">
+        <li>Managed by the Student Council Welfare Committee</li>
+        <li>Verified in person at the Front Office, Rm 101</li>
+        <li>Unclaimed gadgets held for 30 days, then donated or recycled</li>
+        <li>Open Mon–Fri, 7:00 AM – 4:30 PM</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== REPORT FORM ===== -->
+<section id="report">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow" style="color:var(--sun);">Report</span>
+      <h2>Lost something not on the board?</h2>
+      <p>Fill this in and the front office will watch for it and message you the moment it's turned in.</p>
+    </div>
+
+    <form class="form-shell" id="lostForm">
+      <div class="field-row">
+        <div class="field">
+          <label for="name">Full name</label>
+          <input type="text" id="name" placeholder="Juan Dela Cruz" required>
+        </div>
+        <div class="field">
+          <label for="grade">Grade &amp; section</label>
+          <input type="text" id="grade" placeholder="10 - Sunflower" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="itemType">Item type</label>
+        <select id="itemType">
+          <option>Phone</option>
+          <option>Laptop</option>
+          <option>Earphones / Earbuds</option>
+          <option>Charger / Cable</option>
+          <option>Tablet</option>
+          <option>Smartwatch</option>
+          <option>Other gadget</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="desc">Description</label>
+        <textarea id="desc" rows="3" placeholder="Color, brand, case design, last known location..."></textarea>
+      </div>
+
+      <div class="field">
+        <label for="contact">Contact number or email</label>
+        <input type="text" id="contact" placeholder="For the office to reach you" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">Submit Report</button>
+      <p class="submit-note" id="submitNote">Report noted — the front office will reach out once a matching item turns up.</p>
+    </form>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <h5>Found It</h5>
+        <p style="max-width:320px;">A student-run lost &amp; found board for every gadget that goes missing on campus — because your phone shouldn't disappear into a drawer for a semester.</p>
+      </div>
+      <div>
+        <h5>Quick Links</h5>
+        <p><a href="#browse">Browse Items</a></p>
+        <p><a href="#how">How It Works</a></p>
+        <p><a href="#report">Report an Item</a></p>
+      </div>
+      <div>
+        <h5>Front Office</h5>
+        <p>Room 101, Main Building</p>
+        <p>Mon–Fri, 7:00 AM – 4:30 PM</p>
+        <p>foundit@riversidehigh.edu.ph</p>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 Riverside High School</span>
+      <span>Student Council Welfare Committee</span>
+    </div>
+  </div>
+</footer>
+
+</div><!-- /#mainWebsite -->
+
+<script src="script.js"></script>
+
+</body>
+</html>
