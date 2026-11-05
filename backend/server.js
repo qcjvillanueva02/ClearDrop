@@ -90,7 +90,7 @@ app.use((err, _req, res, _next) => {
 // ---------------------------------------------------------------------------
 // START SERVER & CRON
 // ---------------------------------------------------------------------------
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`====================================================`);
   console.log(` ClearDrop Node.js API Server running on port ${PORT}`);
   console.log(` Health check: http://localhost:${PORT}/api/health`);

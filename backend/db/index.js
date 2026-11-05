@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -9,12 +10,171 @@ let sqliteDb = null;
 if (!isSupabaseConfigured) {
   try {
     const { DatabaseSync } = require('node:sqlite');
-    // Path to cleardrop.sqlite in workspace root or backend directory
-    const dbPath = path.resolve(__dirname, '../../cleardrop.sqlite');
+    // Look in current dir, parent dir, or fallback to local backend sqlite file
+    let dbPath = process.env.SQLITE_DB_PATH;
+    if (!dbPath) {
+      const candidates = [
+        path.resolve(__dirname, '../../cleardrop.sqlite'),
+        path.resolve(__dirname, '../cleardrop.sqlite'),
+        path.resolve(process.cwd(), 'cleardrop.sqlite')
+      ];
+      dbPath = candidates.find(p => fs.existsSync(p)) || path.resolve(__dirname, '../cleardrop.sqlite');
+    }
+
     sqliteDb = new DatabaseSync(dbPath);
     console.log(`[db] Using local SQLite database at: ${dbPath}`);
+    ensureSqliteTables(sqliteDb);
   } catch (err) {
     console.warn('[db] SQLite initialization note:', err.message);
+  }
+}
+
+function ensureSqliteTables(db) {
+  try {
+    const tableExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get();
+    if (tableExists) return;
+
+    console.log('[db] Initializing SQLite database schema and seed data...');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role_key TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        google_sub TEXT,
+        email TEXT,
+        auth_provider TEXT NOT NULL DEFAULT 'password',
+        role_id INTEGER NOT NULL REFERENCES roles(id),
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS components (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        unit TEXT NOT NULL,
+        stock INTEGER NOT NULL DEFAULT 0,
+        price_cents INTEGER NOT NULL DEFAULT 0,
+        low_stock_at INTEGER NOT NULL DEFAULT 5,
+        estimated_unit_cost_cents INTEGER,
+        cost_is_estimate INTEGER NOT NULL DEFAULT 1,
+        orderable INTEGER NOT NULL DEFAULT 1,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sku TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        product_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        sale_price_cents INTEGER NOT NULL,
+        estimated_unit_cost_cents INTEGER,
+        cost_is_estimate INTEGER NOT NULL DEFAULT 1,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS bom_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL REFERENCES products(id),
+        version INTEGER NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (product_id, version)
+      );
+      CREATE TABLE IF NOT EXISTS bom_items (
+        bom_version_id INTEGER NOT NULL REFERENCES bom_versions(id),
+        component_id INTEGER NOT NULL REFERENCES components(id),
+        quantity_milli INTEGER NOT NULL,
+        PRIMARY KEY (bom_version_id, component_id)
+      );
+      CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        customer_name TEXT NOT NULL,
+        contact TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        total_cents INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS order_items (
+        order_id INTEGER NOT NULL REFERENCES orders(id),
+        material_id INTEGER NOT NULL REFERENCES components(id),
+        material_name TEXT NOT NULL,
+        unit TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        price_cents INTEGER NOT NULL,
+        PRIMARY KEY (order_id, material_id)
+      );
+      CREATE TABLE IF NOT EXISTS order_reservations (
+        username TEXT NOT NULL,
+        material_id INTEGER NOT NULL REFERENCES components(id),
+        quantity INTEGER NOT NULL,
+        PRIMARY KEY (username, material_id)
+      );
+
+      INSERT OR IGNORE INTO roles (id, role_key, name, description) VALUES
+        (1, 'admin', 'Admin / Owner', 'Full access to inventory, catalog, and users'),
+        (2, 'inventory', 'Inventory & Purchasing', 'Manages materials and stock'),
+        (3, 'production', 'Production / Assembler', 'Builds units based on BOM'),
+        (4, 'sales', 'Sales & Orders', 'Manages orders and customer requests'),
+        (5, 'partner', 'Partner / Customer', 'Community partner access'),
+        (6, 'distributor', 'Community Distributor', 'Community distribution hub'),
+        (7, 'customer', 'Demo Customer', 'Orders filter materials');
+
+      INSERT OR IGNORE INTO users (id, username, display_name, password_hash, role_id, active) VALUES
+        (1, 'clearadmin', 'ClearDrop Demo Admin', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 1, 1),
+        (2, 'clearinventory', 'Inventory Specialist', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 2, 1),
+        (3, 'clearproduction', 'Production Assembler', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 3, 1),
+        (4, 'clearsales', 'Sales Coordinator', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 4, 1),
+        (5, 'clearpartner', 'Community Partner', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 5, 1),
+        (6, 'cleardistributor', 'Local Distributor', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 6, 1),
+        (7, 'clear2026', 'Demo Household Customer', '$2a$10$d8V7yY2Yv7h5G7m9K.F1o5j1E4f2m1WoYq0wRk72Yp5z0G6o1f4i.', 7, 1);
+
+      INSERT OR IGNORE INTO components (id, code, name, description, unit, stock, price_cents, low_stock_at, estimated_unit_cost_cents, cost_is_estimate, orderable, active) VALUES
+        (1, 'CLD-MESH-001', 'Intake Screen Mesh', '304 stainless steel pre-screen filter to block coarse debris.', 'piece', 50, 12000, 5, 7500, 1, 1, 1),
+        (2, 'CLD-GRAVEL-001', 'Graded Gravel Media', 'Washed coarse gravel for the primary sediment settling bed.', 'kg', 200, 2500, 20, 1200, 1, 1, 1),
+        (3, 'CLD-SAND-001', 'Fine Filter Sand', 'Silica filter sand (0.45-0.55mm) for fine particulate entrapment.', 'kg', 150, 3000, 15, 1500, 1, 1, 1),
+        (4, 'CLD-CARBON-001', 'Activated Carbon Granules', 'Coconut shell activated carbon for chlorine, color, and odor removal.', 'kg', 80, 18000, 10, 9500, 1, 1, 1),
+        (5, 'CLD-CERAMIC-001', 'Ceramic Filter Candle', 'Micro-porous 0.2 micron ceramic candle element for bacteria filtration.', 'piece', 60, 35000, 8, 21000, 1, 1, 1),
+        (6, 'CLD-TANK-001', 'HDPE Water Storage Tank (20L)', 'Food-grade certified polyethylene lower reservoir with lid.', 'piece', 25, 85000, 5, 52000, 1, 1, 1),
+        (7, 'CLD-FAUCET-001', 'Dispensing Outlet Tap', 'Sanitary push-lever faucet with food-grade silicone washers.', 'piece', 40, 9500, 5, 4500, 1, 1, 1),
+        (8, 'CLD-GASKET-001', 'Tank Lid Gasket', 'Airtight EPDM gasket preventing external dust and insect intrusion.', 'piece', 100, 4500, 15, 2000, 1, 1, 1),
+        (9, 'CLD-PIPE-001', 'Connector Pipe Set', 'Food-grade PVC interconnect pipe set with flow-control valve.', 'set', 35, 11000, 5, 6000, 1, 1, 1),
+        (10, 'CLD-ORING-001', 'Silicone O-Ring Pack', 'Replacement pack of 5 high-temperature sealing O-rings.', 'pack', 120, 3500, 20, 1500, 1, 1, 1),
+        (11, 'CLD-UV-001', 'UV Disinfection Lamp Module', 'Low-voltage 12V DC germicidal ultraviolet chamber add-on.', 'piece', 15, 120000, 3, 75000, 1, 1, 1),
+        (12, 'CLD-ADAPTER-001', 'Power Adapter 12V/2A', 'Regulated AC/DC adapter for optional UV disinfection module.', 'piece', 20, 28000, 5, 16000, 1, 1, 1),
+        (13, 'CLD-BRACKET-001', 'Wall/Base Mounting Bracket', 'Powder-coated steel bracket for elevated gravity filter placement.', 'piece', 45, 6500, 8, 3500, 1, 1, 1),
+        (14, 'CLD-LABEL-001', 'QR Maintenance Label Sheet', 'Weatherproof adhesive QR label for maintenance and ordering tracking.', 'sheet', 500, 1500, 50, 500, 1, 1, 1);
+
+      INSERT OR IGNORE INTO products (id, sku, name, product_type, description, sale_price_cents, estimated_unit_cost_cents, cost_is_estimate, active) VALUES
+        (1, 'CD-UNIT-001', 'ClearDrop Standard Gravity Filter Unit', 'Complete household gravity water filter system with 20L storage and 4-stage media.', 350000, 195000, 1, 1),
+        (2, 'CD-CART-001', 'ClearDrop Annual Media Replacement Pack', 'Complete replacement media cartridge kit: sand, carbon, and ceramic candle.', 85000, 48000, 1, 1);
+
+      INSERT OR IGNORE INTO bom_versions (id, product_id, version, notes, created_by) VALUES
+        (1, 1, 1, 'Initial standard bill of materials for household gravity filter unit', 1),
+        (2, 2, 1, 'Annual replacement consumables pack', 1);
+
+      INSERT OR IGNORE INTO bom_items (bom_version_id, component_id, quantity_milli) VALUES
+        (1, 1, 1000), (1, 2, 3000), (1, 3, 4000), (1, 4, 1500), (1, 5, 1000), (1, 6, 1000), (1, 7, 1000), (1, 8, 1000), (1, 9, 1000),
+        (2, 3, 3000), (2, 4, 1500), (2, 5, 1000);
+    `);
+    console.log('[db] SQLite database seeded successfully.');
+  } catch (err) {
+    console.warn('[db] SQLite schema setup error:', err.message);
   }
 }
 
@@ -198,10 +358,8 @@ async function cartAdd(username, code) {
     if (!comp) throw new Error('That QR code does not match a stocked ClearDrop material.');
     if (comp.stock < 1) throw new Error(`${comp.name} is out of stock.`);
 
-    // Decrement stock
     await supabase.from('components').update({ stock: comp.stock - 1 }).eq('id', comp.id);
 
-    // Upsert reservation
     const { data: existing } = await supabase
       .from('order_reservations')
       .select('quantity')
@@ -252,7 +410,6 @@ async function cartRemove(username, materialId) {
 
     if (!res) throw new Error('That item is no longer in your basket.');
 
-    // Return stock
     const { data: comp } = await supabase.from('components').select('stock').eq('id', mId).single();
     if (comp) {
       await supabase.from('components').update({ stock: comp.stock + 1 }).eq('id', mId);
@@ -451,7 +608,6 @@ async function getCatalogData(isAdmin = false) {
     if (!isAdmin) compQuery = compQuery.eq('active', 1);
     const { data: components } = await compQuery.order('active', { ascending: false }).order('name');
 
-    // Attach latest BOM for each product
     const formattedProducts = await Promise.all((products || []).map(async prod => {
       const { data: bom } = await supabase
         .from('bom_versions')

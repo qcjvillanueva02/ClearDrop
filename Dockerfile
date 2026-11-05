@@ -1,20 +1,17 @@
-# ClearDrop Node.js Backend Container
+# ClearDrop Node.js Backend Container for Render
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
+# Copy package files (supports both root and backend/ build contexts)
 COPY backend/package*.json ./
-RUN npm install --production
+RUN npm install --omit=dev
 
-# Copy backend application source
+# Copy backend source code
 COPY backend/ ./
-
-# Copy local sqlite database as offline fallback
-COPY cleardrop.sqlite ../cleardrop.sqlite
 
 EXPOSE 3001
 ENV PORT=3001
 ENV NODE_ENV=production
 
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
