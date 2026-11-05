@@ -377,3 +377,8 @@ frontend/.env
 backend/.env
 .env.local
 .env.*.local
+
+# Windows junction aliases
+/Front End
+/Back End
+/Database Junction

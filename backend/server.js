@@ -21,9 +21,8 @@ const allowedOrigins = [
 ];
 
 if (process.env.FRONTEND_URL) {
-  // Support comma-separated URLs or single URL
   process.env.FRONTEND_URL.split(',').forEach(url => {
-    const trimmed = url.trim().replace(/\/$/, '');
+    const trimmed = url.trim().replace(/\/+$/, '');
     if (trimmed && !allowedOrigins.includes(trimmed)) {
       allowedOrigins.push(trimmed);
     }
@@ -32,12 +31,15 @@ if (process.env.FRONTEND_URL) {
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.onrender.com')) {
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.onrender.com') ||
+      origin.includes('github.io')
+    ) {
       return callback(null, true);
     }
-    // In production, log and still permit if user is testing their custom domain
     return callback(null, true);
   },
   credentials: true,
@@ -60,25 +62,91 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'ClearDrop Backend API',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get('/', (_req, res) => {
   res.json({
     service: 'ClearDrop Gravity Filter System API',
     status: 'running',
     health: '/api/health',
-    endpoints: ['/api/auth', '/api/inventory', '/api/catalog']
+    endpoints: [
+      '/api/auth',
+      '/auth',
+      '/api/inventory',
+      '/inventory',
+      '/api/catalog',
+      '/catalog'
+    ]
   });
 });
 
 // ---------------------------------------------------------------------------
-// ROUTES
+// COMPREHENSIVE ROUTE MOUNTING (Handles both /api/xxx and /xxx)
 // ---------------------------------------------------------------------------
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
+
 app.use('/api/inventory', inventoryRoutes);
+app.use('/inventory', inventoryRoutes);
+
 app.use('/api/catalog', catalogRoutes);
+app.use('/catalog', catalogRoutes);
+
+// Direct shortcuts for common endpoints
+app.post('/login', (req, res, next) => {
+  req.url = '/login';
+  authRoutes(req, res, next);
+});
+
+app.get('/status', (req, res, next) => {
+  req.url = '/status';
+  authRoutes(req, res, next);
+});
+
+app.post('/logout', (req, res, next) => {
+  req.url = '/logout';
+  authRoutes(req, res, next);
+});
+
+// Backward compatibility with legacy PHP script URLs
+app.all('/auth.php', (req, res, next) => {
+  const action = req.query?.action || req.body?.action;
+  if (action === 'status' || req.method === 'GET') {
+    req.url = '/status';
+  } else {
+    req.url = '/login';
+  }
+  authRoutes(req, res, next);
+});
+
+app.all('/inventory-api.php', (req, res, next) => {
+  if (req.method === 'GET') {
+    req.url = '/dashboard';
+  } else {
+    req.url = '/';
+  }
+  inventoryRoutes(req, res, next);
+});
+
+app.all('/catalog-api.php', (req, res, next) => {
+  req.url = '/';
+  catalogRoutes(req, res, next);
+});
 
 // 404 handler
-app.use((_req, res) => {
-  res.status(404).json({ message: 'API route not found' });
+app.use((req, res) => {
+  res.status(404).json({
+    message: 'API route not found',
+    requestedPath: req.path,
+    supportedPrefixes: ['/api/auth', '/auth', '/api/inventory', '/inventory', '/api/catalog', '/catalog']
+  });
 });
 
 // Error handler
@@ -93,7 +161,7 @@ app.use((err, _req, res, _next) => {
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`====================================================`);
   console.log(` ClearDrop Node.js API Server running on port ${PORT}`);
-  console.log(` Health check: http://localhost:${PORT}/api/health`);
+  console.log(` Health check: http://0.0.0.0:${PORT}/api/health`);
   console.log(`====================================================`);
 
   // Start self-ping cron job to keep Render free tier awake 24/7

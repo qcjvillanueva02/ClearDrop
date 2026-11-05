@@ -139,16 +139,16 @@ INSERT INTO roles (id, role_key, name, description) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Demo Users (Passwords: stock manager = stock123, customer = drop123)
--- bcrypt hash for 'stock123': $2y$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W
--- bcrypt hash for 'drop123':  $2y$10$d8V7yY2Yv7h5G7m9K.F1o5j1E4f2m1WoYq0wRk72Yp5z0G6o1f4i.
+-- bcrypt hash for 'stock123': $2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO
+-- bcrypt hash for 'drop123':  $2a$10$MxjhhYuUTJKvvo.4nhdBkO8wtt9Kzd887SeXKYebT5uqW64mnwGJ.
 INSERT INTO users (id, username, display_name, password_hash, role_id, active) VALUES
-    (1, 'clearadmin', 'Admin Manager', '$2y$10$1Y8kH0w8k4k1dGk5Q0n0i.X5FzQyWb9F7vO3P6s5a8k9m0n1o2p3q', 1, 1),
-    (2, 'clearinventory', 'Stock Controller', '$2y$10$1Y8kH0w8k4k1dGk5Q0n0i.X5FzQyWb9F7vO3P6s5a8k9m0n1o2p3q', 2, 1),
-    (3, 'clearproduction', 'Assembly Lead', '$2y$10$1Y8kH0w8k4k1dGk5Q0n0i.X5FzQyWb9F7vO3P6s5a8k9m0n1o2p3q', 3, 1),
-    (4, 'clearsales', 'Sales Officer', '$2y$10$1Y8kH0w8k4k1dGk5Q0n0i.X5FzQyWb9F7vO3P6s5a8k9m0n1o2p3q', 4, 1),
-    (5, 'clearpartner', 'Barangay Health Partner', '$2y$10$1Y8kH0w8k4k1dGk5Q0n0i.X5FzQyWb9F7vO3P6s5a8k9m0n1o2p3q', 5, 1),
-    (6, 'cleardistributor', 'Community Hub', '$2y$10$1Y8kH0w8k4k1dGk5Q0n0i.X5FzQyWb9F7vO3P6s5a8k9m0n1o2p3q', 6, 1),
-    (7, 'clear2026', 'Community Resident', '$2y$10$9K2zF5s0a8k9m0n1o2p3q.X5FzQyWb9F7vO3P6s5a8k9m0n1o2p3q', 7, 1)
+    (1, 'clearadmin', 'ClearDrop Demo Admin', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 1, 1),
+    (2, 'clearinventory', 'Stock Controller', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 2, 1),
+    (3, 'clearproduction', 'Assembly Lead', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 3, 1),
+    (4, 'clearsales', 'Sales Officer', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 4, 1),
+    (5, 'clearpartner', 'Barangay Health Partner', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 5, 1),
+    (6, 'cleardistributor', 'Community Hub', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 6, 1),
+    (7, 'clear2026', 'Community Resident', '$2a$10$MxjhhYuUTJKvvo.4nhdBkO8wtt9Kzd887SeXKYebT5uqW64mnwGJ.', 7, 1)
 ON CONFLICT (id) DO NOTHING;
 
 -- Components (14 core items)

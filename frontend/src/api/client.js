@@ -1,12 +1,17 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Normalize API base URL: ensure it trims trailing slashes and handles both /api and root paths
+const rawBase = (import.meta.env.VITE_API_URL || 'https://cleardrop-whwa.onrender.com/api').trim().replace(/\/+$/, '');
+const API_BASE = rawBase.endsWith('/api') ? rawBase : `${rawBase}/api`;
+
+console.log('[ClearDrop API] Connecting to:', API_BASE);
 
 const api = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  timeout: 15000 // 15 second timeout for cold starts
 });
 
 // Interceptor to attach JWT token from localStorage
@@ -23,13 +28,15 @@ api.interceptors.response.use(
   response => response,
   error => {
     if (error.response && error.response.status === 401) {
-      // Don't auto-clear on initial status check
       if (!error.config.url.includes('/auth/status')) {
         localStorage.removeItem('cleardrop_token');
         localStorage.removeItem('cleardrop_user');
       }
     }
-    const message = error.response?.data?.message || error.response?.data?.error || error.message;
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      (error.code === 'ECONNABORTED' ? 'Connection timed out. The server may be waking up.' : error.message);
     return Promise.reject(new Error(message));
   }
 );

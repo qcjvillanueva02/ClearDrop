@@ -136,13 +136,13 @@ function ensureSqliteTables(db) {
         (7, 'customer', 'Demo Customer', 'Orders filter materials');
 
       INSERT OR IGNORE INTO users (id, username, display_name, password_hash, role_id, active) VALUES
-        (1, 'clearadmin', 'ClearDrop Demo Admin', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 1, 1),
-        (2, 'clearinventory', 'Inventory Specialist', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 2, 1),
-        (3, 'clearproduction', 'Production Assembler', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 3, 1),
-        (4, 'clearsales', 'Sales Coordinator', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 4, 1),
-        (5, 'clearpartner', 'Community Partner', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 5, 1),
-        (6, 'cleardistributor', 'Local Distributor', '$2a$10$oYq0wRk72Yp5z0G6o1f4i.w7c6iN1M0Yf5c7U9K.F1o5j1E4f2m1W', 6, 1),
-        (7, 'clear2026', 'Demo Household Customer', '$2a$10$d8V7yY2Yv7h5G7m9K.F1o5j1E4f2m1WoYq0wRk72Yp5z0G6o1f4i.', 7, 1);
+        (1, 'clearadmin', 'ClearDrop Demo Admin', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 1, 1),
+        (2, 'clearinventory', 'Inventory Specialist', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 2, 1),
+        (3, 'clearproduction', 'Production Assembler', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 3, 1),
+        (4, 'clearsales', 'Sales Coordinator', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 4, 1),
+        (5, 'clearpartner', 'Community Partner', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 5, 1),
+        (6, 'cleardistributor', 'Local Distributor', '$2a$10$NG3MM5fijGVrK10enwlBhuRnOvsnf2DIAhyJ2JQc9d2iKDm6b5kyO', 6, 1),
+        (7, 'clear2026', 'Demo Household Customer', '$2a$10$MxjhhYuUTJKvvo.4nhdBkO8wtt9Kzd887SeXKYebT5uqW64mnwGJ.', 7, 1);
 
       INSERT OR IGNORE INTO components (id, code, name, description, unit, stock, price_cents, low_stock_at, estimated_unit_cost_cents, cost_is_estimate, orderable, active) VALUES
         (1, 'CLD-MESH-001', 'Intake Screen Mesh', '304 stainless steel pre-screen filter to block coarse debris.', 'piece', 50, 12000, 5, 7500, 1, 1, 1),
