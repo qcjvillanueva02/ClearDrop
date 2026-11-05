@@ -1,0 +1,16 @@
+services:
+  cleardrop:
+    build: .
+    ports:
+      - "${APP_PORT:-8000}:80"
+    environment:
+      CLEARDROP_DB_PATH: /var/lib/cleardrop/cleardrop.sqlite
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+      CLEARDROP_ADMIN_EMAIL: ${CLEARDROP_ADMIN_EMAIL:-}
+    volumes:
+      - cleardrop-data:/var/lib/cleardrop
+    restart: unless-stopped
+
+volumes:
+  cleardrop-data:

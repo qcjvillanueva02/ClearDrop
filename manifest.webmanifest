@@ -1,0 +1,16 @@
+{
+  "name": "ClearDrop Gravity Filter",
+  "short_name": "ClearDrop",
+  "description": "Gravity water filter ordering and inventory system",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#102A43",
+  "theme_color": "#102A43",
+  "icons": [
+    {
+      "src": "hero-lost-items.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+.git
+.vs
+.vscode
+.env
+cleardrop.sqlite
+cleardrop.sqlite-shm
+cleardrop.sqlite-wal
+*.log

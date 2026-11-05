@@ -1,619 +1,744 @@
-// ============================================================
-// MOBILE NAV TOGGLE
-// ============================================================
 const hamburger = document.getElementById('hamburger');
 const navLinks = document.getElementById('navLinks');
 hamburger.addEventListener('click', () => navLinks.classList.toggle('open'));
-navLinks.querySelectorAll('a').forEach(a => a.addEventListener('click', () => navLinks.classList.remove('open')));
+navLinks.querySelectorAll('a').forEach(link => {
+  link.addEventListener('click', () => navLinks.classList.remove('open'));
+});
 
-// ============================================================
-// FILTER CHIPS (visual only)
-// ============================================================
-document.querySelectorAll('.chip').forEach(chip => {
+const loginScreen = document.getElementById('loginScreen');
+const loginBox = document.getElementById('loginBox');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+const loginUser = document.getElementById('loginUser');
+const loginPass = document.getElementById('loginPass');
+const mainWebsite = document.getElementById('mainWebsite');
+const accountIdDisplay = document.getElementById('accountIdDisplay');
+const navLoginBtn = document.getElementById('navLoginBtn');
+const accountWrap = document.getElementById('accountWrap');
+const navAccountBtn = document.getElementById('navAccountBtn');
+const accountDropdown = document.getElementById('accountDropdown');
+const loginModalOverlay = document.getElementById('loginModalOverlay');
+const loginModalBox = document.getElementById('loginModalBox');
+const loginModalForm = document.getElementById('loginModalForm');
+const loginModalError = document.getElementById('loginModalError');
+const loginModalUser = document.getElementById('loginModalUser');
+const loginModalPass = document.getElementById('loginModalPass');
+const inventoryGrid = document.getElementById('inventoryGrid');
+const dashboardLayout = document.querySelector('.dashboard-layout');
+const orderPanel = document.getElementById('orderPanel');
+const orderPanelToggle = document.getElementById('orderPanelToggle');
+const basketItems = document.getElementById('basketItems');
+const checkoutBtn = document.getElementById('checkoutBtn');
+const orderMessage = document.getElementById('orderMessage');
+const scannerOverlay = document.getElementById('scannerOverlay');
+const scannerMessage = document.getElementById('scannerMessage');
+const qrVideo = document.getElementById('qrVideo');
+let scannerStream = null;
+let scannerActive = false;
+let scannerBusy = false;
+let dashboardData = { materials: [], cart: [], orders: [] };
+
+orderPanelToggle.addEventListener('click', () => {
+  const isExpanded = orderPanelToggle.getAttribute('aria-expanded') === 'true';
+  orderPanel.classList.toggle('is-collapsed', isExpanded);
+  dashboardLayout.classList.toggle('is-panel-collapsed', isExpanded);
+  orderPanelToggle.setAttribute('aria-expanded', String(!isExpanded));
+  orderPanelToggle.setAttribute('aria-label', isExpanded ? 'Expand material basket' : 'Collapse material basket');
+});
+
+async function requestAuth(action, username, password){
+  if (window.ClearDropAPI && typeof window.ClearDropAPI.requestAuth === 'function') {
+    return window.ClearDropAPI.requestAuth(action, username, password);
+  }
+  const options = { method: action === 'status' ? 'GET' : 'POST', credentials:'same-origin' };
+  if (action !== 'status'){
+    options.headers = { 'Content-Type':'application/json' };
+    options.body = JSON.stringify(action === 'google_login'
+      ? { action, credential:username }
+      : { action, username, password });
+  }
+
+  const response = await fetch(`auth.php${action === 'status' ? '?action=status' : ''}`, options);
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error('The login API did not return JSON. Open this site using the PHP server, not a static preview.');
+  }
+  if (!response.ok) throw new Error(result.message || 'The login request failed.');
+  return result;
+}
+
+async function requestInventory(action, payload){
+  if (window.ClearDropAPI && typeof window.ClearDropAPI.requestInventory === 'function') {
+    return window.ClearDropAPI.requestInventory(action, payload);
+  }
+  const options = { method: payload ? 'POST' : 'GET', credentials:'same-origin' };
+  if (payload){
+    options.headers = { 'Content-Type':'application/json' };
+    options.body = JSON.stringify({ action, ...payload });
+  }
+  const response = await fetch(`inventory-api.php${payload ? '' : '?action=dashboard'}`, options);
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error('The inventory API did not return JSON. Run the site with PHP and SQLite enabled.');
+  }
+  if (!response.ok) throw new Error(result.message || 'The inventory request failed.');
+  return result;
+}
+
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[character]);
+}
+
+function money(cents){
+  return new Intl.NumberFormat('en-PH', { style:'currency', currency:'PHP' }).format(Number(cents || 0) / 100);
+}
+
+function setDashboardMessage(message, isError){
+  orderMessage.textContent = message;
+  orderMessage.classList.toggle('is-error', Boolean(isError));
+  orderMessage.classList.toggle('show', Boolean(message));
+}
+
+function renderInventory(){
+  const materials = dashboardData.materials || [];
+  const lowStockCount = materials.filter(item => Number(item.stock) <= Number(item.low_stock_at)).length;
+  const totalUnits = materials.reduce((total, item) => total + Number(item.stock), 0);
+  document.getElementById('stockSummary').innerHTML = `
+    <div class="summary-tile"><strong>${materials.length}</strong><span>Material types</span></div>
+    <div class="summary-tile"><strong>${totalUnits}</strong><span>Available units</span></div>
+    <div class="summary-tile ${lowStockCount ? 'is-low' : ''}"><strong>${lowStockCount}</strong><span>Low-stock items</span></div>`;
+
+  if (!materials.length){
+    inventoryGrid.innerHTML = '<p class="empty-state">No materials are listed yet.</p>';
+    return;
+  }
+
+  inventoryGrid.innerHTML = materials.map(item => {
+    const stock = Number(item.stock);
+    const lowStock = stock <= Number(item.low_stock_at);
+    const restockControl = dashboardData.role === 'admin'
+      ? `<form class="restock-form" data-material-id="${Number(item.id)}">
+          <label for="restock-${Number(item.id)}">Restock</label>
+          <input id="restock-${Number(item.id)}" type="number" min="1" max="10000" value="5" required>
+          <button type="submit">Update stock</button>
+        </form>`
+      : '';
+    return `
+      <article class="material-card ${lowStock ? 'is-low' : ''}">
+        <div class="material-card-top">
+          <span class="material-kicker">${lowStock ? 'Low stock' : 'In stock'}</span>
+          <span class="material-stock">${stock} <small>${escapeHtml(item.unit)}${stock === 1 ? '' : 's'}</small></span>
+        </div>
+        <h4>${escapeHtml(item.name)}</h4>
+        <p>${escapeHtml(item.description)}</p>
+        <div class="material-code"><span>QR MATERIAL CODE</span><code>${escapeHtml(item.code)}</code></div>
+        <div class="material-card-bottom">
+          <strong>${money(item.price_cents)} <small>/ ${escapeHtml(item.unit)}</small></strong>
+          <button type="button" class="btn btn-primary add-material-btn" data-code="${escapeHtml(item.code)}" ${stock < 1 ? 'disabled' : ''}>
+            ${stock < 1 ? 'Out of stock' : 'Add 1 to basket'}
+          </button>
+        </div>
+        ${restockControl}
+      </article>`;
+  }).join('');
+
+  inventoryGrid.querySelectorAll('.add-material-btn').forEach(button => {
+    button.addEventListener('click', () => addMaterial(button.dataset.code));
+  });
+  inventoryGrid.querySelectorAll('.restock-form').forEach(form => {
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const quantity = Number(form.querySelector('input').value);
+      restockMaterial(Number(form.dataset.materialId), quantity);
+    });
+  });
+}
+
+function renderBasket(){
+  const cart = dashboardData.cart || [];
+  const totalUnits = cart.reduce((total, item) => total + Number(item.quantity), 0);
+  const totalCents = cart.reduce((total, item) => total + Number(item.price_cents) * Number(item.quantity), 0);
+  document.getElementById('basketCount').textContent = String(totalUnits);
+  document.getElementById('basketTotal').textContent = money(totalCents);
+  checkoutBtn.disabled = cart.length === 0;
+
+  if (!cart.length){
+    basketItems.innerHTML = '<p class="empty-state">Your basket is empty. Add or scan a material to begin.</p>';
+    return;
+  }
+
+  basketItems.innerHTML = cart.map(item => `
+    <div class="basket-line">
+      <div><strong>${escapeHtml(item.name)}</strong><span>${Number(item.quantity)} × ${money(item.price_cents)}</span></div>
+      <button type="button" class="basket-remove-btn" data-material-id="${Number(item.id)}" aria-label="Remove one ${escapeHtml(item.name)}">−</button>
+    </div>`).join('');
+  basketItems.querySelectorAll('.basket-remove-btn').forEach(button => {
+    button.addEventListener('click', () => removeMaterial(Number(button.dataset.materialId)));
+  });
+}
+
+function nextStatus(status){
+  return { pending:'processing', processing:'ready', ready:'completed' }[status] || '';
+}
+
+function renderOrders(){
+  const orders = dashboardData.orders || [];
+  const ordersList = document.getElementById('ordersList');
+  if (!orders.length){
+    ordersList.innerHTML = '<p class="empty-state">No orders yet. Materials appear here after checkout.</p>';
+    return;
+  }
+
+  ordersList.innerHTML = orders.map(order => {
+    const items = (order.items || []).map(item =>
+      `${Number(item.quantity)} × ${escapeHtml(item.name)}`
+    ).join(', ');
+    const next = nextStatus(order.status);
+    const controls = dashboardData.role === 'admin' && (order.status === 'pending' || order.status === 'processing')
+      ? `<div class="order-actions">
+          ${next ? `<button type="button" class="order-status-btn" data-order-id="${Number(order.id)}" data-status="${next}">${next === 'processing' ? 'Start preparing' : 'Mark ready'}</button>` : ''}
+          <button type="button" class="order-status-btn cancel-order-btn" data-order-id="${Number(order.id)}" data-status="cancelled">Cancel &amp; return stock</button>
+        </div>`
+      : dashboardData.role === 'admin' && order.status === 'ready'
+        ? `<div class="order-actions"><button type="button" class="order-status-btn" data-order-id="${Number(order.id)}" data-status="completed">Mark complete</button></div>`
+        : '';
+    return `
+      <article class="order-card">
+        <div class="order-card-head"><strong>Order #${Number(order.id)}${dashboardData.role === 'admin' ? ` · ${escapeHtml(order.username)}` : ''}</strong><span class="order-status status-${escapeHtml(order.status)}">${escapeHtml(order.status)}</span></div>
+        <p>${items || 'No items listed'}</p>
+        <div class="order-card-foot"><span>${escapeHtml(order.customer_name)} · ${escapeHtml(order.contact)}</span><strong>${money(order.total_cents)}</strong></div>
+        <small>${escapeHtml(order.created_at)}</small>
+        ${controls}
+      </article>`;
+  }).join('');
+
+  ordersList.querySelectorAll('.order-status-btn').forEach(button => {
+    button.addEventListener('click', () => updateOrderStatus(Number(button.dataset.orderId), button.dataset.status));
+  });
+}
+
+async function loadDashboard(){
+  try {
+    dashboardData = await requestInventory('dashboard');
+    renderInventory();
+    renderBasket();
+    renderOrders();
+  } catch (error) {
+    inventoryGrid.innerHTML = `<p class="empty-state is-error">${escapeHtml(error.message)}</p>`;
+    document.getElementById('ordersList').innerHTML = `<p class="empty-state is-error">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function addMaterial(code){
+  setDashboardMessage('', false);
+  try {
+    const result = await requestInventory('cart_add', { code });
+    await loadDashboard();
+    setDashboardMessage(result.message, false);
+  } catch (error) {
+    setDashboardMessage(error.message, true);
+  }
+}
+
+async function removeMaterial(materialId){
+  try {
+    const result = await requestInventory('cart_remove', { materialId });
+    await loadDashboard();
+    setDashboardMessage(result.message, false);
+  } catch (error) {
+    setDashboardMessage(error.message, true);
+  }
+}
+
+async function restockMaterial(materialId, quantity){
+  try {
+    const result = await requestInventory('restock', { materialId, quantity });
+    await loadDashboard();
+    setDashboardMessage(result.message, false);
+  } catch (error) {
+    setDashboardMessage(error.message, true);
+  }
+}
+
+document.getElementById('checkoutForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  checkoutBtn.disabled = true;
+  try {
+    const result = await requestInventory('checkout', {
+      customerName: document.getElementById('checkoutName').value.trim(),
+      contact: document.getElementById('checkoutContact').value.trim(),
+    });
+    form.reset();
+    await loadDashboard();
+    setDashboardMessage(`Order #${result.orderId} is pending. Your reserved stock is now attached to the order.`, false);
+    document.getElementById('orders').scrollIntoView({ behavior:'smooth' });
+  } catch (error) {
+    setDashboardMessage(error.message, true);
+    checkoutBtn.disabled = dashboardData.cart.length === 0;
+  }
+});
+
+async function updateOrderStatus(orderId, status){
+  try {
+    const result = await requestInventory('order_status', { orderId, status });
+    await loadDashboard();
+    setDashboardMessage(result.message, false);
+  } catch (error) {
+    setDashboardMessage(error.message, true);
+  }
+}
+
+document.getElementById('refreshDashboardBtn').addEventListener('click', loadDashboard);
+
+function parseQrCode(rawValue){
+  const value = String(rawValue || '').trim();
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed.code === 'string') return parsed.code;
+    if (typeof parsed.materialCode === 'string') return parsed.materialCode;
+  } catch {}
+  try {
+    const url = new URL(value);
+    const code = url.searchParams.get('code') || url.searchParams.get('material');
+    if (code) return code;
+  } catch {}
+  return value;
+}
+
+function stopQrScanner(){
+  scannerActive = false;
+  scannerBusy = false;
+  if (scannerStream){
+    scannerStream.getTracks().forEach(track => track.stop());
+    scannerStream = null;
+  }
+  qrVideo.srcObject = null;
+  scannerOverlay.classList.remove('open');
+  scannerOverlay.setAttribute('aria-hidden', 'true');
+}
+
+async function scanQrFrames(detector){
+  if (!scannerActive || scannerBusy || qrVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+  scannerBusy = true;
+  try {
+    const results = await detector.detect(qrVideo);
+    if (results.length){
+      const code = parseQrCode(results[0].rawValue);
+      stopQrScanner();
+      await addMaterial(code);
+      return;
+    }
+  } catch (error) {
+    scannerMessage.textContent = `Camera scan error: ${error.message}`;
+  } finally {
+    scannerBusy = false;
+  }
+  if (scannerActive) window.setTimeout(() => scanQrFrames(detector), 200);
+}
+
+async function openQrScanner(){
+  scannerOverlay.classList.add('open');
+  scannerOverlay.setAttribute('aria-hidden', 'false');
+  scannerMessage.textContent = 'Starting camera scanner…';
+  if (!('BarcodeDetector' in window)){
+    scannerMessage.textContent = 'Camera scanner not available in this browser. Tap any sample material below or type code.';
+    return;
+  }
+  try {
+    const supportedFormats = await BarcodeDetector.getSupportedFormats();
+    if (!supportedFormats.includes('qr_code')){
+      scannerMessage.textContent = 'QR scanning is unavailable. Tap a sample material below or enter code.';
+      return;
+    }
+    const detector = new BarcodeDetector({ formats:['qr_code'] });
+    scannerStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+    qrVideo.srcObject = scannerStream;
+    await qrVideo.play();
+    scannerActive = true;
+    scannerMessage.textContent = 'Point camera at a ClearDrop material QR code.';
+    scanQrFrames(detector);
+  } catch (error) {
+    scannerMessage.textContent = `Camera unavailable (${error.message}). Tap a quick code below.`;
+  }
+}
+
+document.getElementById('openScannerBtn').addEventListener('click', openQrScanner);
+document.getElementById('closeScannerBtn').addEventListener('click', stopQrScanner);
+scannerOverlay.addEventListener('click', event => {
+  if (event.target === scannerOverlay) stopQrScanner();
+});
+document.getElementById('manualQrForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const input = document.getElementById('manualQrCode');
+  const code = parseQrCode(input.value);
+  try {
+    await requestInventory('cart_add', { code });
+    input.value = '';
+    stopQrScanner();
+    await loadDashboard();
+    setDashboardMessage('One unit added by QR code and reserved in your basket.', false);
+  } catch (error) {
+    scannerMessage.textContent = error.message;
+  }
+});
+
+// Fast QR Chip buttons for easy testing on mobile phones
+document.querySelectorAll('.qr-quick-chip').forEach(chip => {
+  chip.addEventListener('click', async () => {
+    const code = chip.dataset.code;
+    const input = document.getElementById('manualQrCode');
+    input.value = code;
+    try {
+      await requestInventory('cart_add', { code });
+      input.value = '';
+      stopQrScanner();
+      await loadDashboard();
+      setDashboardMessage(`One unit of ${code} added and reserved in basket!`, false);
+    } catch (err) {
+      scannerMessage.textContent = err.message;
+    }
+  });
+});
+
+document.getElementById('navSearchBtn').addEventListener('click', event => {
+  const button = event.currentTarget;
+  const panel = document.getElementById('searchPanel');
+  const isOpen = panel.classList.toggle('open');
+  button.classList.toggle('active', isOpen);
+  button.setAttribute('aria-expanded', String(isOpen));
+  if (isOpen) setTimeout(() => document.getElementById('searchInput').focus(), 200);
+});
+
+document.getElementById('searchInput').addEventListener('input', event => {
+  const query = event.currentTarget.value.trim().toLowerCase();
+  let count = 0;
+  document.querySelectorAll('#browse .grid .card').forEach(card => {
+    const visible = card.textContent.toLowerCase().includes(query);
+    card.style.display = visible ? '' : 'none';
+    if (visible) count++;
+  });
+  document.getElementById('searchNoResults').classList.toggle('show', count === 0);
+  if (query.length > 2) {
+    const browseSection = document.getElementById('browse');
+    if (browseSection && window.scrollY < 300) {
+      browseSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+});
+
+document.getElementById('searchClearBtn').addEventListener('click', () => {
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  document.querySelectorAll('#browse .grid .card').forEach(card => card.style.display = '');
+  document.getElementById('searchNoResults').classList.remove('show');
+  input.focus();
+});
+
+// Category filter chips in #browse
+const filterChips = document.querySelectorAll('.filter-row .chip');
+filterChips.forEach(chip => {
   chip.addEventListener('click', () => {
-    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    filterChips.forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
+    const category = chip.textContent.trim().toLowerCase();
+    document.querySelectorAll('#browse .grid .card').forEach(card => {
+      const cardCat = (card.dataset.category || '').toLowerCase();
+      const show = category === 'all' || cardCat === category;
+      card.style.display = show ? '' : 'none';
+    });
   });
 });
 
-// ============================================================
-// "THIS IS MINE" QUICK FEEDBACK
-// ============================================================
-document.querySelectorAll('.grid .btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const original = btn.textContent;
-    btn.textContent = 'Reported to office ✓';
-    btn.style.background = '#F6C400';
-    btn.style.color = '#1A1712';
-    setTimeout(() => {
-      btn.textContent = original;
-      btn.style.background = '';
-      btn.style.color = '';
-    }, 2200);
-  });
-});
+// Stage Detail Information Modal
+const STAGE_DETAILS = {
+  intake: {
+    title: 'Stage 1 · Raw Water Intake',
+    subtitle: 'Pre-Screen Inlet & Coarse Filtration',
+    description: 'The first line of defense in the ClearDrop system. Raw water from rainwater collection or untreated sources passes through a washable 304 stainless or food-grade HDPE mesh screen.',
+    benefits: ['Intercepts leaves, twigs, insects, and large debris', 'Protects deeper sand & ceramic stages from premature clogging', 'Easily rinsed with clean water without disassembling the main tank']
+  },
+  sediment: {
+    title: 'Stage 2 · Sediment Trap',
+    subtitle: 'Graded Sand & Gravel Bed',
+    description: 'A multi-density physical filtration bed consisting of clean washed graded gravel (bottom) and fine quartz filter sand (top). Silt and particulate matter are trapped within the granular pores.',
+    benefits: ['Removes suspended soil, turbidity, and fine cloudiness', 'Utilizes slow gravity settlement for maximum particle capture', 'Long-lasting natural mineral media that can be backwashed or replaced']
+  },
+  carbon: {
+    title: 'Stage 3 · Activated Carbon',
+    subtitle: 'Coconut-Shell Adsorption Layer',
+    description: 'High-iodine activated carbon granules produced from sustainable coconut shells. Provides an enormous internal surface area that chemically adsorbs dissolved contaminants.',
+    benefits: ['Eliminates objectionable odors, chlorine, and swampy taste', 'Adsorbs volatile organic compounds (VOCs) and pesticides', 'Leaves water clear, fresh, and naturally palatable']
+  },
+  membrane: {
+    title: 'Stage 4 · Ceramic Membrane',
+    subtitle: 'Sub-Micron Porous Microfilter Element',
+    description: 'High-fired diatomaceous ceramic candle element with micro-porous filtration structure. As water percolates through the ceramic walls, micro-organisms and protozoan cysts are barred.',
+    benefits: ['Sub-micron mechanical barrier against micro-particulates', 'Washable outer surface: scrub with a soft brush when flow rate slows', 'Gravity-powered without pumps, electricity, or chemical additives']
+  },
+  sterilizer: {
+    title: 'Optional · UV Disinfection Add-on',
+    subtitle: 'Germicidal Ultra-Violet Disinfection',
+    description: 'An optional modular add-on for installations where low-voltage DC solar power or battery backup is available. Destroys the DNA of bacteria and viruses in passing water.',
+    benefits: ['Secondary disinfection without adding chlorine or leaving taste', 'Instant biological neutralization before storage', 'Easy retrofitting onto the ClearDrop gravity outlet pipe']
+  },
+  storage: {
+    title: 'Final Stage · Clean Water Storage',
+    subtitle: 'Food-Grade HDPE Reservoir with Safe Tap',
+    description: 'The purified water collects in a sealed, food-grade HDPE lower container equipped with an airtight gasket, insect-proof vent, and a sanitary dispensing outlet tap.',
+    benefits: ['Protects treated water from re-contamination and mosquitoes', 'Food-grade certified, BPA-free polymer construction', 'Ergonomic dispensing tap designed for daily family drinking containers']
+  }
+};
 
-// ============================================================
-// REPORT FORM SUBMIT FEEDBACK (no backend — demo only)
-// ============================================================
-const form = document.getElementById('lostForm');
-const note = document.getElementById('submitNote');
-form.addEventListener('submit', (e) => {
-  e.preventDefault();
-  note.classList.add('show');
-  form.querySelector('button[type="submit"]').textContent = 'Submitted ✓';
-});
-
-// ============================================================
-// LOGIN-FIRST GATE
-// The Home page (#mainWebsite) stays hidden via CSS
-// (display:none) until these credentials are accepted.
-// ============================================================
-const loginScreen  = document.getElementById('loginScreen');
-const loginBox     = document.getElementById('loginBox');
-const loginForm    = document.getElementById('loginForm');
-const loginError   = document.getElementById('loginError');
-const loginUser    = document.getElementById('loginUser');
-const loginPass    = document.getElementById('loginPass');
-const loginVideo   = document.getElementById('loginVideo');
-const mainWebsite  = document.getElementById('mainWebsite');
-
-// demo-only credentials — no backend/database
-const DEMO_USER = '2410526';
-const DEMO_PASS = '1234';
-
-// ------------------------------------------------------------
-// checkLoginState — runs once on load. If the user already has
-// a saved session, skip the full-screen video login entirely
-// and go straight to the Home page (logged-in navbar state).
-// If not, run the normal full-screen login flow.
-// ------------------------------------------------------------
-function checkLoginState(){
-  const alreadyLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-
-  if (alreadyLoggedIn) {
-    // Skip the video login screen completely — no flash, no animation.
-    loginScreen.style.display = 'none';
-    mainWebsite.classList.add('revealed');
+const stageModal = document.getElementById('stageModal');
+const stageModalClose = document.getElementById('stageModalClose');
+if (stageModalClose) {
+  stageModalClose.addEventListener('click', () => {
+    stageModal.classList.remove('open');
     document.body.style.overflow = '';
-    updateNavbar(true);
-  } else {
-    // First visit / no saved session — show the full-screen video login.
-    setTimeout(() => loginUser.focus(), 400);
-    loginVideo.play().catch(() => { /* autoplay may need a user gesture on some browsers */ });
-    updateNavbar(false);
+  });
+}
+if (stageModal) {
+  stageModal.addEventListener('click', event => {
+    if (event.target === stageModal) {
+      stageModal.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+  });
+}
+
+document.querySelectorAll('#browse .grid .card').forEach(card => {
+  const detailBtn = card.querySelector('.btn-primary');
+  if (detailBtn) {
+    detailBtn.addEventListener('click', () => {
+      const cat = card.dataset.category || 'intake';
+      const info = STAGE_DETAILS[cat] || STAGE_DETAILS.intake;
+      document.getElementById('stageModalTitle').textContent = info.title;
+      document.getElementById('stageModalSubtitle').textContent = info.subtitle;
+      document.getElementById('stageModalDesc').textContent = info.description;
+      const benefitsList = document.getElementById('stageModalBenefits');
+      benefitsList.innerHTML = info.benefits.map(b => `<li>${escapeHtml(b)}</li>`).join('');
+      stageModal.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    });
+  }
+});
+
+// Profile Modal
+const profileModal = document.getElementById('profileModal');
+const profileModalClose = document.getElementById('profileModalClose');
+const navProfileLink = document.getElementById('navProfileLink');
+if (navProfileLink) {
+  navProfileLink.addEventListener('click', event => {
+    event.preventDefault();
+    accountDropdown.classList.remove('open');
+    navAccountBtn.classList.remove('active');
+    navAccountBtn.setAttribute('aria-expanded', 'false');
+
+    const currentUser = window.clearDropCurrentUser || { username: accountIdDisplay.textContent, role: 'customer' };
+    document.getElementById('profileUsername').textContent = currentUser.username;
+    document.getElementById('profileDisplayName').textContent = currentUser.displayName || currentUser.username;
+    document.getElementById('profileRole').textContent = roleTitle(currentUser.role);
+    const mode = window.ClearDropAPI?.getMode() === 'php' ? 'Live PHP & SQLite Server' : 'GitHub Live Demo (Standalone)';
+    document.getElementById('profileMode').textContent = mode;
+
+    profileModal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  });
+}
+if (profileModalClose) {
+  profileModalClose.addEventListener('click', () => {
+    profileModal.classList.remove('open');
+    document.body.style.overflow = '';
+  });
+}
+if (profileModal) {
+  profileModal.addEventListener('click', event => {
+    if (event.target === profileModal) {
+      profileModal.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+  });
+}
+
+// Reset Demo Data button
+const resetDemoBtn = document.getElementById('resetDemoBtn');
+if (resetDemoBtn) {
+  resetDemoBtn.addEventListener('click', () => {
+    if (window.confirm('Reset all demo inventory, orders, and catalog back to initial values?')) {
+      window.ClearDropAPI.resetDemoData();
+    }
+  });
+}
+
+function showLoginError(element, message, box){
+  element.textContent = message;
+  element.classList.add('show');
+  if (box){
+    box.classList.remove('shake');
+    void box.offsetWidth;
+    box.classList.add('shake');
+  }
+}
+
+function updateNavbar(isLoggedIn){
+  navLoginBtn.style.display = isLoggedIn ? 'none' : 'inline-block';
+  accountWrap.style.display = isLoggedIn ? 'block' : 'none';
+  if (!isLoggedIn){
+    accountDropdown.classList.remove('open');
+    navAccountBtn.classList.remove('active');
+    navAccountBtn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function roleTitle(role){
+  return {
+    admin:'Admin / Owner',
+    inventory:'Inventory & Purchasing',
+    production:'Production / Assembler',
+    sales:'Sales & Orders',
+    partner:'Partner / Customer',
+    distributor:'Community Distributor',
+    customer:'Demo Customer',
+  }[role] || 'ClearDrop Account';
+}
+
+function showWebsite(username, role, displayName){
+  window.clearDropCurrentUser = { username, role, displayName: displayName || username };
+  accountIdDisplay.textContent = username;
+  document.querySelector('.account-dropdown-title').textContent = roleTitle(role);
+  loginScreen.style.display = 'none';
+  mainWebsite.classList.add('revealed');
+  document.body.style.overflow = '';
+  updateNavbar(true);
+  window.dispatchEvent(new CustomEvent('cleardrop:authenticated', {
+    detail:{ username, role, displayName:displayName || username }
+  }));
+  loadDashboard();
+}
+
+function showLoginScreen(){
+  stopQrScanner();
+  loginScreen.style.display = 'flex';
+  mainWebsite.classList.remove('revealed');
+  document.body.style.overflow = '';
+  loginForm.reset();
+  loginError.classList.remove('show');
+  updateNavbar(false);
+  window.dispatchEvent(new CustomEvent('cleardrop:loggedout'));
+  setTimeout(() => loginUser.focus(), 50);
+}
+
+function unavailableMessage(error){
+  return error instanceof TypeError && error.message === 'Failed to fetch'
+    ? 'Login service unavailable. Verify connection or refresh to use standalone demo mode.'
+    : error.message;
+}
+
+async function checkLoginState(){
+  try {
+    const result = await requestAuth('status');
+    if (result && result.authenticated){
+      showWebsite(result.username, result.role, result.displayName);
+    } else {
+      updateNavbar(false);
+      setTimeout(() => loginUser.focus(), 100);
+    }
+  } catch (error) {
+    showLoginError(loginError, unavailableMessage(error));
   }
 }
 
 window.addEventListener('DOMContentLoaded', checkLoginState);
 
-loginForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const user = loginUser.value.trim();
-  const pass = loginPass.value.trim();
-
-  if (user === DEMO_USER && pass === DEMO_PASS) {
+loginForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  try {
+    const result = await requestAuth('login', loginUser.value.trim(), loginPass.value);
     loginError.classList.remove('show');
-    localStorage.setItem('isLoggedIn', 'true');
-    handleSuccessfulLogin();
-  } else {
-    loginError.classList.add('show');
-    loginBox.classList.remove('shake');
-    void loginBox.offsetWidth; // restart shake animation
-    loginBox.classList.add('shake');
+    showWebsite(result.username, result.role, result.displayName);
+  } catch (error) {
+    showLoginError(loginError, unavailableMessage(error), loginBox);
   }
 });
 
-function handleSuccessfulLogin(){
-  // Instant switch — no chained setTimeouts, no fade-out delay.
-  // The moment the credentials are accepted, the login screen is
-  // removed and the Home page is shown in the same frame, so there
-  // is no gap (and therefore no white/blank flash) between the two.
-  loginVideo.pause();
-  loginScreen.style.display = 'none';
-
-  mainWebsite.classList.add('revealed');
-  document.body.style.overflow = '';
-
-  // site is now fully interactive, logged in
-  updateNavbar(true);
-}
-
-// ============================================================
-// NAVBAR AUTH STATE — Login button / Account menu / Search
-// ============================================================
-const navAuthItem     = document.getElementById('navAuthItem');
-const navLoginBtn     = document.getElementById('navLoginBtn');
-const accountWrap     = document.getElementById('accountWrap');
-const navAccountBtn   = document.getElementById('navAccountBtn');
-const accountDropdown = document.getElementById('accountDropdown');
-const logoutBtn       = document.getElementById('logoutBtn');
-
-const loginModalOverlay = document.getElementById('loginModalOverlay');
-const loginModalBox     = document.getElementById('loginModalBox');
-const loginModalClose   = document.getElementById('loginModalClose');
-const loginModalForm    = document.getElementById('loginModalForm');
-const loginModalError   = document.getElementById('loginModalError');
-const loginModalUser    = document.getElementById('loginModalUser');
-const loginModalPass    = document.getElementById('loginModalPass');
-
-const navSearchBtn   = document.getElementById('navSearchBtn');
-const searchPanel    = document.getElementById('searchPanel');
-const searchInput    = document.getElementById('searchInput');
-const searchClearBtn = document.getElementById('searchClearBtn');
-const searchNoResults= document.getElementById('searchNoResults');
-
-// ------------------------------------------------------------
-// updateNavbar — swaps the navbar between Login button and
-// Account ▾ menu depending on the saved login state.
-// ------------------------------------------------------------
-function updateNavbar(isLoggedIn){
-  if (isLoggedIn) {
-    navLoginBtn.style.display = 'none';
-    accountWrap.style.display = 'block';
-  } else {
-    navLoginBtn.style.display = 'inline-block';
-    accountWrap.style.display = 'none';
-    accountDropdown.classList.remove('open');
-    navAccountBtn.classList.remove('active');
+window.addEventListener('cleardrop:googleCredential', async event => {
+  const modalLogin = loginModalOverlay.classList.contains('open');
+  const errorElement = modalLogin ? loginModalError : loginError;
+  const errorContainer = modalLogin ? loginModalBox : loginBox;
+  try {
+    const result = await requestAuth('google_login', event.detail.credential);
+    errorElement.classList.remove('show');
+    if (modalLogin) closeLoginModal();
+    showWebsite(result.username, result.role, result.displayName);
+  } catch (error) {
+    showLoginError(errorElement, unavailableMessage(error), errorContainer);
+    window.dispatchEvent(new Event('cleardrop:googleRefresh'));
   }
-}
+});
 
-// ------------------------------------------------------------
-// Login modal — opened from the navbar Login button. Shows a
-// login form as an overlay on top of the current Home page.
-// Never navigates away and never re-shows the full-screen login.
-// ------------------------------------------------------------
-function openLoginModal(){
+navLoginBtn.addEventListener('click', () => {
   loginModalError.classList.remove('show');
   loginModalForm.reset();
   loginModalOverlay.classList.add('open');
   document.body.style.overflow = 'hidden';
   setTimeout(() => loginModalUser.focus(), 150);
-}
+});
 
 function closeLoginModal(){
   loginModalOverlay.classList.remove('open');
   document.body.style.overflow = '';
 }
 
-navLoginBtn.addEventListener('click', openLoginModal);
-loginModalClose.addEventListener('click', closeLoginModal);
-loginModalOverlay.addEventListener('click', (e) => {
-  if (e.target === loginModalOverlay) closeLoginModal();
+document.getElementById('loginModalClose').addEventListener('click', closeLoginModal);
+loginModalOverlay.addEventListener('click', event => {
+  if (event.target === loginModalOverlay) closeLoginModal();
 });
-
-function loginUserFromModal(){
-  const user = loginModalUser.value.trim();
-  const pass = loginModalPass.value.trim();
-
-  if (user === DEMO_USER && pass === DEMO_PASS) {
+loginModalForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  try {
+    const result = await requestAuth('login', loginModalUser.value.trim(), loginModalPass.value);
     loginModalError.classList.remove('show');
-    localStorage.setItem('isLoggedIn', 'true');
+    accountIdDisplay.textContent = result.username;
+    document.querySelector('.account-dropdown-title').textContent = roleTitle(result.role);
     updateNavbar(true);
+    window.dispatchEvent(new CustomEvent('cleardrop:authenticated', {
+      detail:{ username:result.username, role:result.role, displayName:result.displayName || result.username }
+    }));
     closeLoginModal();
-  } else {
-    loginModalError.classList.add('show');
-    loginModalBox.classList.remove('shake');
-    void loginModalBox.offsetWidth; // restart shake animation
-    loginModalBox.classList.add('shake');
+    loadDashboard();
+  } catch (error) {
+    showLoginError(loginModalError, unavailableMessage(error), loginModalBox);
   }
-}
-
-loginModalForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  loginUserFromModal();
 });
 
-// ------------------------------------------------------------
-// Account dropdown — toggles open/closed, closes on outside click.
-// ------------------------------------------------------------
-function toggleAccountMenu(){
+navAccountBtn.addEventListener('click', event => {
+  event.stopPropagation();
   const isOpen = accountDropdown.classList.toggle('open');
   navAccountBtn.classList.toggle('active', isOpen);
   navAccountBtn.setAttribute('aria-expanded', String(isOpen));
-}
-
-navAccountBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  toggleAccountMenu();
 });
 
-document.addEventListener('click', (e) => {
-  if (!accountWrap.contains(e.target)) {
+document.addEventListener('click', event => {
+  if (!accountWrap.contains(event.target)){
     accountDropdown.classList.remove('open');
     navAccountBtn.classList.remove('active');
+    navAccountBtn.setAttribute('aria-expanded', 'false');
   }
 });
 
-// ------------------------------------------------------------
-// Logout — clears saved session, updates navbar, stays on the
-// current Home page. No redirect, no reload.
-// ------------------------------------------------------------
-function logoutUser(){
-  localStorage.removeItem('isLoggedIn');
-  accountDropdown.classList.remove('open');
-  navAccountBtn.classList.remove('active');
-  updateNavbar(false);
-}
-
-logoutBtn.addEventListener('click', logoutUser);
-
-// ============================================================
-// SEARCH — filters the existing Lost & Found item cards
-// ============================================================
-function searchItems(query){
-  const q = query.trim().toLowerCase();
-  const cards = document.querySelectorAll('#browse .grid .card');
-  let anyVisible = false;
-
-  cards.forEach(card => {
-    const haystack = card.textContent.toLowerCase();
-    const isMatch = q === '' || haystack.includes(q);
-    card.style.display = isMatch ? '' : 'none';
-    if (isMatch) anyVisible = true;
-  });
-
-  searchNoResults.classList.toggle('show', !anyVisible);
-}
-
-navSearchBtn.addEventListener('click', () => {
-  const isOpen = searchPanel.classList.toggle('open');
-  navSearchBtn.classList.toggle('active', isOpen);
-  navSearchBtn.setAttribute('aria-expanded', String(isOpen));
-  if (isOpen) setTimeout(() => searchInput.focus(), 200);
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  try {
+    await requestAuth('logout');
+    showLoginScreen();
+  } catch (error) {
+    window.alert(`Could not log out: ${unavailableMessage(error)}`);
+  }
 });
-
-searchInput.addEventListener('input', () => searchItems(searchInput.value));
-
-searchClearBtn.addEventListener('click', () => {
-  searchInput.value = '';
-  searchItems('');
-  searchInput.focus();
-});
-
-// ============================================================
-// HELP ME FIND MY ITEM — category → brand → design → color →
-// logo → details → results wizard
-// ============================================================
-(function(){
-
-  function slug(str){
-    return String(str).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  }
-
-  const CATEGORY_LABELS = {
-    phone:'Phones', ids:"ID's", creditcard:'Credit Cards', wallet:'Wallets',
-    keys:'Keys', bags:'Bags', eyewear:'Eyewear', laptop:'Laptops',
-    earphones:'Earphones', smartwatch:'Smartwatches', charger:'Chargers',
-    tablet:'Tablets', other:'Other Items'
-  };
-
-  const BRANDS = {
-    phone: ['Apple','Samsung','Xiaomi','Oppo','Vivo','Huawei','Google','Other'],
-    laptop: ['Dell','HP','Lenovo','Asus','Acer','Apple','MSI','Other'],
-    earphones: ['Apple','Samsung','Sony','JBL','Xiaomi','Anker','Other'],
-    smartwatch: ['Apple','Samsung','Huawei','Xiaomi','Garmin','Fitbit','Other'],
-    tablet: ['Apple','Samsung','Lenovo','Huawei','Other'],
-    wallet: ['Leather','Fabric / Nylon','Cardholder','Other'],
-    keys: ['Car Key','House Key','Keychain (multiple keys)','Other'],
-    bags: ['Backpack','Sling Bag','Tote / Handbag','Duffel Bag','Other'],
-    eyewear: ['Sunglasses','Prescription Glasses','Reading Glasses','Other'],
-    charger: ['Phone Charger','Laptop Charger','Power Bank','Cable Only','Other'],
-    ids: ['School ID','Government ID','Employee ID','Other'],
-    creditcard: ['BDO','BPI','Metrobank','UnionBank','Other'],
-    other: ['Not Sure / Other']
-  };
-
-  // brand-aware "design" options. Return null to skip the design step.
-  function getDesignOptions(category, brand){
-    if (category === 'phone'){
-      if (brand === 'apple') return ['iPhone with 1 camera','iPhone with 2 cameras','iPhone with 3 cameras','Not sure'];
-      if (brand === 'samsung') return ['Galaxy S Series','Galaxy A Series','Galaxy Note','Other / Not sure'];
-      return null;
-    }
-    if (category === 'laptop') return ['Standard laptop','2-in-1 / Foldable','Gaming laptop (thick, RGB)','Not sure'];
-    if (category === 'earphones') return ['True wireless earbuds','Neckband style','Over-ear headphones','Wired earphones'];
-    if (category === 'smartwatch') return ['Round face','Square / rectangular face','Fitness band (no watch face)','Not sure'];
-    return null;
-  }
-
-  const COLORS = ['Black','White','Silver','Gray','Blue','Red','Green','Gold','Pink','Purple','Other / Not Sure'];
-  const COLOR_SWATCH = {
-    black:'#1A1712', white:'#ffffff', silver:'#c9c9c9', gray:'#8a8a8a',
-    blue:'#2f6fce', red:'#d9480f', green:'#3f7d3a', gold:'#d4af37',
-    pink:'#e78bb0', purple:'#7c5cbf', 'other-not-sure':'#ffffff'
-  };
-
-  // categories where a logo question makes sense
-  const LOGO_CATEGORIES = ['phone','laptop','earphones','smartwatch','tablet','creditcard','ids'];
-
-  function getLogoOptions(category){
-    return LOGO_CATEGORIES.includes(category) ? BRANDS[category] : null;
-  }
-
-  // ------------------------------------------------------------
-  // Wizard state
-  // ------------------------------------------------------------
-  let state = {};
-  let steps = [];   // e.g. ['brand','design','color','logo','details','results']
-  let stepIndex = 0;
-
-  function resetState(category){
-    state = { category: category, brand:null, design:null, color:null, logo:null, details:'' };
-    steps = ['brand', 'color', 'details', 'results']; // rebuilt once brand/category known
-    stepIndex = 0;
-  }
-
-  function rebuildSteps(){
-    const s = ['brand'];
-    if (getDesignOptions(state.category, state.brand)) s.push('design');
-    s.push('color');
-    if (getLogoOptions(state.category)) s.push('logo');
-    s.push('details');
-    s.push('results');
-    steps = s;
-  }
-
-  // ------------------------------------------------------------
-  // DOM refs
-  // ------------------------------------------------------------
-  const finderCatGrid       = document.getElementById('finderCatGrid');
-  const finderModalOverlay  = document.getElementById('finderModalOverlay');
-  const finderModalBox      = document.getElementById('finderModalBox');
-  const finderModalClose    = document.getElementById('finderModalClose');
-  const finderProgress      = document.getElementById('finderProgress');
-  const finderBackBtn       = document.getElementById('finderBackBtn');
-  const finderStepTitle     = document.getElementById('finderModalTitle');
-  const finderStepBody      = document.getElementById('finderStepBody');
-  const finderStepActions   = document.getElementById('finderStepActions');
-
-  function openFinderModal(category){
-    resetState(category);
-    finderModalOverlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
-    renderStep();
-  }
-
-  function closeFinderModal(){
-    finderModalOverlay.classList.remove('open');
-    document.body.style.overflow = '';
-  }
-
-  finderCatGrid.querySelectorAll('.finder-cat-card').forEach(card => {
-    card.addEventListener('click', () => openFinderModal(card.dataset.category));
-  });
-
-  finderModalClose.addEventListener('click', closeFinderModal);
-  finderModalOverlay.addEventListener('click', (e) => {
-    if (e.target === finderModalOverlay) closeFinderModal();
-  });
-
-  finderBackBtn.addEventListener('click', () => {
-    if (stepIndex > 0){
-      stepIndex--;
-      renderStep();
-    } else {
-      // back from the very first question (Brand) returns to category picking
-      closeFinderModal();
-    }
-  });
-
-  function goNext(){
-    if (stepIndex < steps.length - 1){
-      stepIndex++;
-      renderStep();
-    }
-  }
-
-  // ------------------------------------------------------------
-  // Progress pills — shows Category (always done) + dynamic steps
-  // ------------------------------------------------------------
-  function renderProgress(){
-    const labels = { brand:'Brand', design:'Design', color:'Color', logo:'Logo', details:'Details', results:'Results' };
-    let html = '<span class="finder-progress-step done">1. Category</span>';
-    steps.forEach((s, i) => {
-      const cls = i < stepIndex ? 'done' : (i === stepIndex ? 'current' : '');
-      html += `<span class="finder-progress-step ${cls}">${i + 2}. ${labels[s]}</span>`;
-    });
-    finderProgress.innerHTML = html;
-  }
-
-  // ------------------------------------------------------------
-  // Step renderers
-  // ------------------------------------------------------------
-  function renderStep(){
-    const current = steps[stepIndex];
-    renderProgress();
-    finderBackBtn.classList.add('show');
-    finderBackBtn.textContent = (stepIndex > 0) ? '← Back' : '← Change Category';
-    finderStepActions.innerHTML = '';
-
-    if (current === 'brand') return renderBrandStep();
-    if (current === 'design') return renderDesignStep();
-    if (current === 'color') return renderColorStep();
-    if (current === 'logo') return renderLogoStep();
-    if (current === 'details') return renderDetailsStep();
-    if (current === 'results') return renderResultsStep();
-  }
-
-  function renderBrandStep(){
-    finderStepTitle.textContent = 'What brand is it?';
-    const brands = BRANDS[state.category] || ['Other'];
-    let html = '<div class="finder-option-grid">';
-    brands.forEach(b => {
-      html += `<button type="button" class="finder-option-btn" data-value="${slug(b)}">${b}</button>`;
-    });
-    html += '<button type="button" class="finder-option-btn not-sure" data-value="">Not Sure</button></div>';
-    finderStepBody.innerHTML = html;
-
-    finderStepBody.querySelectorAll('.finder-option-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.brand = btn.dataset.value || null;
-        rebuildSteps();
-        stepIndex = steps.indexOf('brand') + 1;
-        renderStep();
-      });
-    });
-  }
-
-  function renderDesignStep(){
-    finderStepTitle.textContent = 'What does it look like?';
-    const designs = getDesignOptions(state.category, state.brand) || ['Not sure'];
-    finderStepBody.innerHTML = `
-      <p class="finder-step-sub">Which design looks closest?</p>
-      <div class="finder-design-grid">
-        ${designs.map(d => `<button type="button" class="finder-design-card" data-value="${slug(d)}">${d}</button>`).join('')}
-      </div>`;
-    finderStepBody.querySelectorAll('.finder-design-card').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.design = btn.dataset.value || null;
-        goNext();
-      });
-    });
-  }
-
-  function renderColorStep(){
-    finderStepTitle.textContent = 'What color is it?';
-    let html = '<div class="finder-color-grid">';
-    COLORS.forEach(c => {
-      const sw = COLOR_SWATCH[slug(c)] || '#efe4bd';
-      const border = (c === 'White') ? 'border:2px solid #d8c98c;' : '';
-      html += `<button type="button" class="finder-color-btn" data-value="${slug(c)}">
-                 <span class="finder-color-swatch" style="background:${sw};${border}"></span>${c}
-               </button>`;
-    });
-    html += '</div>';
-    finderStepBody.innerHTML = html;
-
-    finderStepBody.querySelectorAll('.finder-color-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const v = btn.dataset.value;
-        state.color = (v === 'other-not-sure') ? null : v;
-        goNext();
-      });
-    });
-  }
-
-  function renderLogoStep(){
-    finderStepTitle.textContent = 'What logo or marking does it have?';
-    const logos = getLogoOptions(state.category) || ['Other'];
-    let html = '<div class="finder-option-grid">';
-    logos.forEach(l => {
-      html += `<button type="button" class="finder-option-btn" data-value="${slug(l)}">${l}</button>`;
-    });
-    html += '<button type="button" class="finder-option-btn not-sure" data-value="">Not Sure</button></div>';
-    finderStepBody.innerHTML = html;
-
-    finderStepBody.querySelectorAll('.finder-option-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.logo = btn.dataset.value || null;
-        goNext();
-      });
-    });
-  }
-
-  function renderDetailsStep(){
-    finderStepTitle.textContent = 'Is there anything special about it?';
-    finderStepBody.innerHTML = `
-      <p class="finder-step-sub">Optional — case, sticker, damage, keychain, or other detail.</p>
-      <textarea class="finder-details-input" id="finderDetailsInput" rows="3"
-        placeholder="Describe any case, sticker, damage, keychain, or other detail...">${state.details || ''}</textarea>`;
-
-    finderStepActions.innerHTML = `
-      <button type="button" class="btn btn-ghost" id="finderSkipDetails">Skip</button>
-      <button type="button" class="btn btn-primary" id="finderContinueDetails">See Matching Items</button>`;
-
-    document.getElementById('finderSkipDetails').addEventListener('click', () => {
-      state.details = '';
-      goNext();
-    });
-    document.getElementById('finderContinueDetails').addEventListener('click', () => {
-      state.details = document.getElementById('finderDetailsInput').value.trim();
-      goNext();
-    });
-  }
-
-  // ------------------------------------------------------------
-  // Matching — scores existing Lost & Found cards against state
-  // ------------------------------------------------------------
-  function scoreCard(card){
-    const d = card.dataset;
-    let score = 0;
-
-    if (state.category && d.category === state.category) score += 4;
-    if (state.brand && d.brand && d.brand === state.brand) score += 3;
-    if (state.design && d.design && d.design === state.design) score += 3;
-    if (state.color && d.color && d.color === state.color) score += 2;
-    if (state.logo && d.logo && d.logo === state.logo) score += 2;
-
-    if (state.details){
-      const words = state.details.toLowerCase().split(/\s+/).filter(w => w.length >= 4);
-      const haystack = card.textContent.toLowerCase();
-      let detailHits = 0;
-      words.forEach(w => { if (haystack.includes(w)) detailHits++; });
-      score += Math.min(detailHits, 3);
-    }
-
-    return score;
-  }
-
-  function renderResultsStep(){
-    finderStepTitle.textContent = 'We found these items that may be yours.';
-
-    const allCards = Array.from(document.querySelectorAll('#browse .grid .card'));
-    const scored = allCards
-      .map(card => ({ card, score: scoreCard(card) }))
-      .filter(x => x.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    const summaryParts = [];
-    summaryParts.push(`<b>Category:</b> ${CATEGORY_LABELS[state.category] || state.category}`);
-    if (state.brand) summaryParts.push(`<b>Brand:</b> ${state.brand.replace(/-/g,' ')}`);
-    if (state.design) summaryParts.push(`<b>Design:</b> ${state.design.replace(/-/g,' ')}`);
-    if (state.color) summaryParts.push(`<b>Color:</b> ${state.color.replace(/-/g,' ')}`);
-    if (state.logo) summaryParts.push(`<b>Logo:</b> ${state.logo.replace(/-/g,' ')}`);
-    if (state.details) summaryParts.push(`<b>Details:</b> ${state.details}`);
-
-    let html = `<div class="finder-results-summary">${summaryParts.join('<br>')}</div>`;
-
-    if (scored.length === 0){
-      html += `<p class="finder-no-results">No items found that match yet. Try starting over with fewer details, or browse everything logged so far.</p>`;
-      finderStepBody.innerHTML = html;
-    } else {
-      html += '<div class="finder-results-grid" id="finderResultsGrid"></div>';
-      finderStepBody.innerHTML = html;
-      const resultsGrid = document.getElementById('finderResultsGrid');
-      scored.forEach(({ card }) => resultsGrid.appendChild(card.cloneNode(true)));
-
-      // delegated "This is mine" feedback for cloned buttons
-      resultsGrid.querySelectorAll('.btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const original = btn.textContent;
-          btn.textContent = 'Reported to office ✓';
-          btn.style.background = '#F6C400';
-          btn.style.color = '#1A1712';
-          setTimeout(() => {
-            btn.textContent = original;
-            btn.style.background = '';
-            btn.style.color = '';
-          }, 2200);
-        });
-      });
-    }
-
-    finderStepActions.innerHTML = `
-      <button type="button" class="btn btn-ghost" id="finderStartOver">Start Over</button>
-      <button type="button" class="btn btn-primary" id="finderBrowseAll">Browse All Items</button>`;
-
-    document.getElementById('finderStartOver').addEventListener('click', () => {
-      closeFinderModal();
-      document.getElementById('finder').scrollIntoView({ behavior:'smooth' });
-    });
-    document.getElementById('finderBrowseAll').addEventListener('click', () => {
-      closeFinderModal();
-      document.getElementById('browse').scrollIntoView({ behavior:'smooth' });
-    });
-  }
-
-})();
