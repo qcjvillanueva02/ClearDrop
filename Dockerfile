@@ -1,11 +1,20 @@
-FROM php:8.3-apache
+# ClearDrop Node.js Backend Container
+FROM node:20-alpine
 
-RUN docker-php-ext-install pdo_sqlite \
-    && mkdir -p /var/lib/cleardrop \
-    && chown -R www-data:www-data /var/lib/cleardrop
+WORKDIR /app
 
-ENV CLEARDROP_DB_PATH=/var/lib/cleardrop/cleardrop.sqlite
-WORKDIR /var/www/html
-COPY --chown=www-data:www-data . /var/www/html
+# Install dependencies
+COPY backend/package*.json ./
+RUN npm install --production
 
-EXPOSE 80
+# Copy backend application source
+COPY backend/ ./
+
+# Copy local sqlite database as offline fallback
+COPY cleardrop.sqlite ../cleardrop.sqlite
+
+EXPOSE 3001
+ENV PORT=3001
+ENV NODE_ENV=production
+
+CMD ["npm", "start"]

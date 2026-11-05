@@ -1,16 +1,13 @@
 services:
-  cleardrop:
+  cleardrop-backend:
     build: .
     ports:
-      - "${APP_PORT:-8000}:80"
+      - "${PORT:-3001}:3001"
     environment:
-      CLEARDROP_DB_PATH: /var/lib/cleardrop/cleardrop.sqlite
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      DATABASE_URL: ${DATABASE_URL:-}
-      CLEARDROP_ADMIN_EMAIL: ${CLEARDROP_ADMIN_EMAIL:-}
-    volumes:
-      - cleardrop-data:/var/lib/cleardrop
+      NODE_ENV: production
+      PORT: 3001
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-cleardrop-dev-secret-key-32-chars}
+      FRONTEND_URL: ${FRONTEND_URL:-*}
     restart: unless-stopped
-
-volumes:
-  cleardrop-data:
